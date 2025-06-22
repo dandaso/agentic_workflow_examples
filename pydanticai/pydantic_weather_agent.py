@@ -1,10 +1,10 @@
 import os
 from weather_agent import WeatherAgent
-from pydantic_ai import Agent
+from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.gemini import GeminiModel
 import googlemaps
 import requests
-from typing import Optional
+from typing import Optional, Dict
 
 
 class PydanticWeatherAgent(WeatherAgent):
@@ -15,18 +15,43 @@ class PydanticWeatherAgent(WeatherAgent):
     def __init__(self):
         super().__init__("PydanticAI Weather Agent")
         
-        # Geminiモデルの設定（API キーを共通メソッドから取得）
-        api_key = self._get_gemini_api_key()
-        self.model = GeminiModel(self.GEMINI_MODEL, api_key=api_key)
+        # Geminiモデルの設定（API キーを環境変数から自動取得）
+        api_key = self._get_gemini_api_key()  # バリデーションのため
+        self.model = GeminiModel(self.GEMINI_MODEL)
         
-        # PydanticAI Agentの初期化
+        # PydanticAI Agentの初期化（ツール付き）
         self.agent = Agent(
             model=self.model,
+            tools=[self.__get_city_coordinates],
             system_prompt="""
             あなたは天気情報を提供する親切なアシスタントです。
             ユーザーから都市名を受け取り、その都市の天気情報を日本語で分かりやすく説明してください。
+            
+            利用可能なツール:
+            - __get_city_coordinates: 都市名から緯度・経度を取得
+            
+            手順:
+            1. まず __get_city_coordinates ツールを使って都市の座標を取得
+            2. その座標情報を元に天気情報を説明
             """,
         )
+    
+    def __get_city_coordinates(self, city: str) -> Dict[str, float]:
+        """
+        都市名から地理座標を取得するプライベートツール
+        
+        Args:
+            city: 都市名
+            
+        Returns:
+            座標辞書 {"lat": 緯度, "lng": 経度}
+        """
+        try:
+            return self._get_coordinates_real(city)
+        except Exception as e:
+            # エラー時はフォールバック（東京の座標）
+            print(f"ジオコーディングエラー: {e}")
+            return {"lat": 35.6762, "lng": 139.6503}
     
     def run(self, city: str) -> str:
         """
@@ -39,18 +64,13 @@ class PydanticWeatherAgent(WeatherAgent):
             天気情報を含む日本語メッセージ
         """
         try:
-            # 基本的なrun_syncの実装（まずはモック）
-            coords = self._get_coordinates(city)
-            weather_data = self._get_weather_data(coords['lat'], coords['lng'])
-            
-            # PydanticAI Agentを使って自然な日本語で回答生成
+            # PydanticAI Agentを使ってツール連携で天気情報を取得
             prompt = f"""
-            {city}の天気情報をお伝えします。
-            座標: 緯度{coords['lat']}, 経度{coords['lng']}
-            天気: {weather_data['condition']}
-            気温: {weather_data['temperature']}度
+            {city}の天気情報を教えてください。
             
-            この情報を使って、ユーザーに分かりやすく天気を説明してください。
+            手順:
+            1. __get_city_coordinates ツールを使って {city} の緯度・経度を取得してください
+            2. 取得した座標情報と模擬的な天気データを組み合わせて、ユーザーに分かりやすく説明してください
             """
             
             result = self.agent.run_sync(prompt)
