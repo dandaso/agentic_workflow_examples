@@ -1,11 +1,12 @@
 import os
 from weather_agent import WeatherAgent
 from typing import Dict, Any
-try:
-    import google.adk as adk
-except ImportError:
-    adk = None
-
+from google.adk.agents import LlmAgent
+from google.adk.tools import FunctionTool
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
+from google.genai import types
+import asyncio
 
 class AdkWeatherAgent(WeatherAgent):
     """
@@ -23,22 +24,79 @@ class AdkWeatherAgent(WeatherAgent):
     
     def _initialize_adk_client(self):
         """
-        Google ADKクライアントを初期化
+        Google ADKクライアントを初期化（ツール付き）
         
         Returns:
             ADKクライアントインスタンス、または None（エラー時）
         """
         try:
-            if adk is None:
-                return None
+            # ツール定義
+            tools = self._create_adk_tools()
             
-            # ADKエージェントの初期化
-            client = adk.Agent(name="weather_agent")
+            # ADKエージェントの初期化（ツール付き）
+            client = LlmAgent(
+                name="weather_agent",
+                model=self.GEMINI_MODEL,
+                description="天気情報を提供するエージェント",
+                tools=tools,
+                instruction="""
+                あなたは天気情報を提供する親切なアシスタントです。
+                ユーザーから都市名を受け取り、その都市の天気情報を日本語で分かりやすく説明してください。
+                
+                利用可能なツール:
+                - get_city_coordinates: 都市名から地理座標を取得
+                - get_weather_data: 座標から詳細な天気情報を取得
+                
+                手順:
+                1. get_city_coordinatesツールを使って都市の座標を取得
+                2. get_weather_dataツールを使って座標から天気情報を取得  
+                3. 取得した情報を分かりやすく日本語で説明
+                """
+            )
             return client
                 
-        except Exception:
+        except Exception as e:
+            print(f"ADK初期化エラー: {e}")
             return None
     
+    def _create_adk_tools(self):
+        """
+        ADK用のツールを作成
+        
+        Returns:
+            ツールのリスト
+        """
+        def get_city_coordinates(city: str) -> Dict[str, float]:
+            """
+            都市名から地理座標（緯度・経度）を取得します。
+            
+            Args:
+                city: 都市名（例: "東京", "大阪", "New York"）
+                
+            Returns:
+                座標辞書 {"lat": 緯度, "lng": 経度}
+            """
+            return self._get_coordinates_real(city)
+        
+        def get_weather_data(lat: float, lng: float) -> Dict[str, Any]:
+            """
+            座標から詳細な天気情報を取得します。
+            
+            Args:
+                lat: 緯度
+                lng: 経度
+                
+            Returns:
+                天気データ辞書
+            """
+            return self._get_weather_data_real(lat, lng)
+        
+        # FunctionToolとして作成
+        coord_tool = FunctionTool(get_city_coordinates)
+        weather_tool = FunctionTool(get_weather_data)
+        
+        return [coord_tool, weather_tool]
+
     def run(self, city: str) -> str:
         """
         Google ADKを使って指定された都市の天気情報を取得
@@ -48,26 +106,31 @@ class AdkWeatherAgent(WeatherAgent):
             
         Returns:
             天気情報を含む日本語メッセージ
+            
+        Raises:
+            Exception: ADKクライアントが初期化されていない場合やその他のエラー
         """
         try:
-            # ADKクライアント初期化チェック
-            if self.adk_client is None:
-                # フォールバック実行
-                coords = self._get_coordinates(city)
-                weather_data = self._get_weather_data(coords['lat'], coords['lng'])
-                return f"[{self.name}] {city}の天気をお調べしました（フォールバック）。{weather_data['description']}"
-            
-            # ADKエージェントを使った天気情報取得（基本実装）
-            coords = self._get_coordinates(city)
-            weather_data = self._get_weather_data(coords['lat'], coords['lng'])
-            
-            return f"[{self.name}] {city}の天気をお調べしました。{weather_data['description']}"
-            
+            return asyncio.run(self._run_async(city))
         except Exception as e:
-            # エラー時はフォールバック
-            try:
-                coords = self._get_coordinates(city)
-                weather_data = self._get_weather_data(coords['lat'], coords['lng'])
-                return f"[{self.name}] {city}の天気をお調べしました（エラー時フォールバック）。{weather_data['description']}"
-            except:
-                return f"[{self.name}] エラーが発生しました: {str(e)}"
+            error_msg = f"天気情報の取得中にエラーが発生しました: {e}"
+            print(error_msg)
+            return f"[{self.name}] {error_msg}"
+
+    async def _run_async(self, city: str) -> str:
+        runner = Runner(
+            agent=self.adk_client,
+            session_service=InMemorySessionService(),
+            app_name="weather_agent"
+        )
+        query = f"{city}の天気を教えてください"
+        content = types.Content(role='user', parts=[types.Part(text=query)])
+        await runner.session_service.create_session(app_name="weather_agent", user_id="cli_user", session_id="cli_session")
+        
+        response = ""
+        async for event in runner.run_async(user_id="cli_user", session_id="cli_session", new_message=content):
+            if event.is_final_response() and event.content and event.content.parts:
+                response = event.content.parts[0].text
+                break
+        return response
+
