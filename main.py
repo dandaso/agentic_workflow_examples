@@ -1,5 +1,5 @@
 from dotenv import load_dotenv
-from pydanticai.pydantic_weather_agent import PydanticWeatherAgent
+from langchain.langchain_weather_agent import LangchainWeatherAgent
 
 # 環境変数を読み込み
 load_dotenv()
@@ -12,8 +12,8 @@ def get_city_input():
 def main():
     print("天気情報アプリへようこそ！")
     
-    # PydanticAI Weather Agentを初期化
-    agent = PydanticWeatherAgent()
+    # LangChain Weather Agentを初期化
+    agent = LangchainWeatherAgent()
     
     # 都市名を入力
     city = get_city_input()
