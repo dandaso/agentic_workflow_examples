@@ -22,6 +22,7 @@ agentic_workflow_examples
  - 次に、経度緯度をOpenWeatherMapに渡して、天気を得ます
  - 天気をコマンドラインに日本語で出力して終了します
 
+
 ## Commands
 - Install dependencies: `uv sync`
 - Add dependency: `uv add <package>`
