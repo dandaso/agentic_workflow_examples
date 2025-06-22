@@ -4,7 +4,7 @@ from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.gemini import GeminiModel
 import googlemaps
 import requests
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 
 
 class PydanticWeatherAgent(WeatherAgent):
@@ -22,17 +22,19 @@ class PydanticWeatherAgent(WeatherAgent):
         # PydanticAI Agentの初期化（ツール付き）
         self.agent = Agent(
             model=self.model,
-            tools=[self.__get_city_coordinates],
+            tools=[self.__get_city_coordinates, self.__get_weather_data],
             system_prompt="""
             あなたは天気情報を提供する親切なアシスタントです。
             ユーザーから都市名を受け取り、その都市の天気情報を日本語で分かりやすく説明してください。
             
             利用可能なツール:
             - __get_city_coordinates: 都市名から緯度・経度を取得
+            - __get_weather_data: 座標から詳細な天気情報を取得
             
             手順:
             1. まず __get_city_coordinates ツールを使って都市の座標を取得
-            2. その座標情報を元に天気情報を説明
+            2. 次に __get_weather_data ツールを使って座標から天気情報を取得
+            3. 取得した情報を分かりやすく日本語で説明
             """,
         )
     
@@ -53,6 +55,22 @@ class PydanticWeatherAgent(WeatherAgent):
             print(f"ジオコーディングエラー: {e}")
             return {"lat": 35.6762, "lng": 139.6503}
     
+    def __get_weather_data(self, lat: float, lng: float) -> Dict[str, Any]:
+        """
+        座標から天気データを取得するプライベートツール
+        
+        Args:
+            lat: 緯度
+            lng: 経度
+            
+        Returns:
+            天気データ辞書
+            
+        Raises:
+            Exception: API呼び出しエラーの場合
+        """
+        return self._get_weather_data_real(lat, lng)
+    
     def run(self, city: str) -> str:
         """
         PydanticAIを使って指定された都市の天気情報を取得
@@ -70,7 +88,8 @@ class PydanticWeatherAgent(WeatherAgent):
             
             手順:
             1. __get_city_coordinates ツールを使って {city} の緯度・経度を取得してください
-            2. 取得した座標情報と模擬的な天気データを組み合わせて、ユーザーに分かりやすく説明してください
+            2. __get_weather_data ツールを使って取得した座標から詳細な天気情報を取得してください
+            3. 取得した情報を分かりやすく日本語で説明してください
             """
             
             result = self.agent.run_sync(prompt)
