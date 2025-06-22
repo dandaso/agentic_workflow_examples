@@ -38,6 +38,10 @@ class LangchainWeatherAgent(WeatherAgent):
 あなたは天気情報を提供する親切なアシスタントです。
 ユーザーから都市名を受け取り、その都市の天気情報を日本語で分かりやすく説明してください。
 
+利用可能なツール:
+- get_city_coordinates: 都市名から地理座標を取得
+- get_weather_data: 座標から詳細な天気情報を取得
+
 質問: {input}
 """)
         
@@ -65,7 +69,26 @@ class LangchainWeatherAgent(WeatherAgent):
                 # エラー時はフォールバック（東京の座標）
                 return {"lat": 35.6762, "lng": 139.6503}
         
-        tools = [get_city_coordinates]
+        @tool
+        def get_weather_data(lat: float, lng: float) -> Dict[str, Any]:
+            """
+            座標から詳細な天気情報を取得します。
+            
+            Args:
+                lat: 緯度
+                lng: 経度
+                
+            Returns:
+                天気データ辞書
+            """
+            try:
+                return self._get_weather_data_real(lat, lng)
+            except Exception as e:
+                print(f"天気APIエラー: {e}")
+                # エラー時はフォールバック（モックデータ）
+                return self._get_weather_data(lat, lng)
+        
+        tools = [get_city_coordinates, get_weather_data]
         return tools
     
     def run(self, city: str) -> str:
@@ -83,8 +106,18 @@ class LangchainWeatherAgent(WeatherAgent):
             get_city_coordinates_tool = self.tools[0]  # get_city_coordinates tool
             coords = get_city_coordinates_tool.invoke(city)
             
-            # LLMに座標情報を含めて質問
-            prompt = f"{city}の天気情報を教えてください。この都市の座標は緯度{coords['lat']}度、経度{coords['lng']}度です。"
+            # ツールを使って天気データを取得
+            get_weather_data_tool = self.tools[1]  # get_weather_data tool
+            weather_data = get_weather_data_tool.invoke({"lat": coords['lat'], "lng": coords['lng']})
+            
+            # LLMに実際の天気データを含めて質問
+            prompt = f"""
+{city}の天気情報を教えてください。
+座標: 緯度{coords['lat']}度、経度{coords['lng']}度
+天気データ: {weather_data['description']}
+
+この情報を元に、分かりやすく日本語で天気情報を説明してください。
+"""
             
             result = self.chain.invoke({"input": prompt})
             return f"[{self.name}] {result.content}"
