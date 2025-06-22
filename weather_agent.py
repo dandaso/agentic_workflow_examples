@@ -49,6 +49,7 @@ class WeatherAgent(ABC):
             raise ValueError("GOOGLE_MAPS_API_KEY環境変数が設定されていません")
         return api_key
     
+    
     @abstractmethod
     def run(self, city: str) -> str:
         """
@@ -117,6 +118,81 @@ class WeatherAgent(ABC):
             "福岡": {"lat": 33.5904, "lng": 130.4017}
         }
         return mock_data.get(city, {"lat": 35.6762, "lng": 139.6503})
+    
+    def _get_weather_data_real(self, lat: float, lng: float) -> Dict[str, Any]:
+        """
+        座標から天気データを取得する実装（Google Weather API使用）
+        
+        Args:
+            lat: 緯度
+            lng: 経度
+            
+        Returns:
+            天気データ辞書
+            
+        Raises:
+            Exception: API呼び出しエラーの場合
+        """
+        import requests
+        
+        try:
+            api_key = self._get_google_maps_api_key()
+            
+            # Google Weather API
+            url = "https://weather.googleapis.com/v1/currentConditions:lookup"
+            params = {
+                'key': api_key,
+                'location.latitude': lat,
+                'location.longitude': lng,
+                'languageCode': 'ja'
+            }
+            
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            
+            data = response.json()
+            
+            # 実際のAPIレスポンス構造に基づいて解析
+            # 温度を取得（摂氏）
+            temperature = round(data.get('temperature', {}).get('degrees', 20))
+            
+            # 天気状況を取得
+            weather_condition = data.get('weatherCondition', {})
+            condition = weather_condition.get('description', {}).get('text', '不明')
+            
+            # 湿度を取得
+            humidity = data.get('relativeHumidity', 50)
+            
+            # 気圧を取得
+            pressure = round(data.get('airPressure', {}).get('meanSeaLevelMillibars', 1013))
+            
+            # 風速を取得（km/hからm/sに変換）
+            wind_speed_kmh = data.get('wind', {}).get('speed', {}).get('value', 0)
+            wind_speed = round(wind_speed_kmh / 3.6) if wind_speed_kmh else 0
+            
+            # 体感温度を取得
+            feels_like = round(data.get('feelsLikeTemperature', {}).get('degrees', temperature))
+            
+            # 降水確率を取得
+            precipitation_prob = data.get('precipitation', {}).get('probability', {}).get('percent', 0)
+            
+            return {
+                "temperature": temperature,
+                "condition": condition,
+                "humidity": humidity,
+                "pressure": pressure,
+                "wind_speed": wind_speed,
+                "feels_like": feels_like,
+                "precipitation_probability": precipitation_prob,
+                "description": f"気温は{temperature}度（体感{feels_like}度）、天気は{condition}です。湿度{humidity}%、気圧{pressure}hPa、風速{wind_speed}m/s、降水確率{precipitation_prob}%"
+            }
+            
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Google Weather APIエラー: {str(e)}")
+        except KeyError as e:
+            raise Exception(f"天気データ解析エラー: {str(e)}")
+        except Exception as e:
+            raise Exception(f"天気情報取得エラー: {str(e)}")
     
     def _get_weather_data(self, lat: float, lng: float) -> Dict[str, Any]:
         """
