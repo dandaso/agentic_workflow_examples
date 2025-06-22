@@ -221,27 +221,6 @@ uv run python main.py
 - **適用場面**: 型安全性が重要なアプリケーション
 - **学習リソース**: [PydanticAI Documentation](https://ai.pydantic.dev/)
 
-## 🤝 コントリビューション
-
-プルリクエストやIssueの報告を歓迎します！
-
-1. このリポジトリをフォーク
-2. フィーチャーブランチを作成 (`git checkout -b feature/amazing-feature`)
-3. 変更をコミット (`git commit -m 'Add amazing feature'`)
-4. ブランチにプッシュ (`git push origin feature/amazing-feature`)
-5. プルリクエストを開く
-
-## 📄 ライセンス
-
-このプロジェクトはMITライセンスの下で公開されています。
-
-## 🙏 謝辞
-
-- Google ADK チーム
-- LangChain コミュニティ  
-- PydanticAI チーム
-- 全てのコントリビューター
-
 ---
 
 **🤖 このプロジェクトは [Claude Code](https://claude.ai/code) によって生成されました**
