@@ -15,9 +15,9 @@ class PydanticWeatherAgent(WeatherAgent):
     def __init__(self):
         super().__init__("PydanticAI Weather Agent")
         
-        # Geminiモデルの設定（API キーを共通メソッドから取得）
-        api_key = self._get_gemini_api_key()
-        self.model = GeminiModel(self.GEMINI_MODEL, api_key=api_key)
+        # Geminiモデルの設定（API キーを環境変数に設定済みの前提）
+        api_key = self._get_gemini_api_key()  # バリデーションのため
+        self.model = GeminiModel(self.GEMINI_MODEL)
         
         # PydanticAI Agentの初期化
         self.agent = Agent(
