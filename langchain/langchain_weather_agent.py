@@ -1,8 +1,9 @@
 import os
 from weather_agent import WeatherAgent
-from typing import List, Any
+from typing import List, Any, Dict
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
+from langchain_core.tools import tool
 import langchain
 langchain.verbose = False
 langchain.debug = False
@@ -29,6 +30,9 @@ class LangchainWeatherAgent(WeatherAgent):
             temperature=0.7
         )
         
+        # ツール定義
+        self.tools = self._create_tools()
+        
         # プロンプトテンプレートの設定
         prompt_template = PromptTemplate.from_template("""
 あなたは天気情報を提供する親切なアシスタントです。
@@ -38,16 +42,30 @@ class LangchainWeatherAgent(WeatherAgent):
 """)
         
         self.chain = prompt_template | self.llm
-        
-        # ツール定義（後で実装）
-        self.tools = self._create_tools()
     
     def _create_tools(self) -> List[Any]:
         """
         LangChain用のツールを作成
         """
-        # 基本的なツール定義（後で拡張）
-        tools = []
+        @tool
+        def get_city_coordinates(city: str) -> Dict[str, float]:
+            """
+            都市名から地理座標（緯度・経度）を取得します。
+            
+            Args:
+                city: 都市名（例: "東京", "大阪", "New York"）
+                
+            Returns:
+                座標辞書 {"lat": 緯度, "lng": 経度}
+            """
+            try:
+                return self._get_coordinates_real(city)
+            except Exception as e:
+                print(f"ジオコーディングエラー: {e}")
+                # エラー時はフォールバック（東京の座標）
+                return {"lat": 35.6762, "lng": 139.6503}
+        
+        tools = [get_city_coordinates]
         return tools
     
     def run(self, city: str) -> str:
@@ -61,8 +79,12 @@ class LangchainWeatherAgent(WeatherAgent):
             天気情報を含む日本語メッセージ
         """
         try:
-            # LangChain LLMチェーンを使って天気情報を取得
-            prompt = f"{city}の天気情報を教えてください。"
+            # ツールを使って座標を取得
+            get_city_coordinates_tool = self.tools[0]  # get_city_coordinates tool
+            coords = get_city_coordinates_tool.invoke(city)
+            
+            # LLMに座標情報を含めて質問
+            prompt = f"{city}の天気情報を教えてください。この都市の座標は緯度{coords['lat']}度、経度{coords['lng']}度です。"
             
             result = self.chain.invoke({"input": prompt})
             return f"[{self.name}] {result.content}"
