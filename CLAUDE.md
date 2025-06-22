@@ -21,6 +21,7 @@ agentic_workflow_examples
  - 都市名を入力すると、Google Maps Geocoding APIから経度緯度に変換します
  - 次に、経度緯度をOpenWeatherMapに渡して、天気を得ます
  - 天気をコマンドラインに日本語で出力して終了します
+ - サンプルなので、いったんテストはいらないです
 
 
 ## Commands

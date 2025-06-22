@@ -34,6 +34,21 @@ class WeatherAgent(ABC):
             raise ValueError("GEMINI_API_KEY環境変数が設定されていません")
         return api_key
     
+    def _get_google_maps_api_key(self) -> str:
+        """
+        Google Maps API キーを環境変数から取得する共通メソッド
+        
+        Returns:
+            API キー文字列
+            
+        Raises:
+            ValueError: API キーが設定されていない場合
+        """
+        api_key = os.getenv('GOOGLE_MAPS_API_KEY')
+        if not api_key:
+            raise ValueError("GOOGLE_MAPS_API_KEY環境変数が設定されていません")
+        return api_key
+    
     @abstractmethod
     def run(self, city: str) -> str:
         """
@@ -50,6 +65,44 @@ class WeatherAgent(ABC):
     def get_name(self) -> str:
         """エージェント名を返す"""
         return self.name
+    
+    def _get_coordinates_real(self, city: str) -> Dict[str, float]:
+        """
+        都市名から座標を取得する実装（Google Maps Geocoding API使用）
+        
+        Args:
+            city: 都市名
+            
+        Returns:
+            座標辞書 {"lat": 緯度, "lng": 経度}
+            
+        Raises:
+            ValueError: 都市が見つからない場合
+            Exception: API呼び出しエラーの場合
+        """
+        import googlemaps
+        
+        try:
+            api_key = self._get_google_maps_api_key()
+            gmaps = googlemaps.Client(key=api_key)
+            
+            # ジオコーディング実行
+            geocode_result = gmaps.geocode(city)
+            
+            if not geocode_result:
+                raise ValueError(f"都市 '{city}' が見つかりませんでした")
+            
+            # 最初の結果から座標を取得
+            location = geocode_result[0]['geometry']['location']
+            return {
+                "lat": location['lat'],
+                "lng": location['lng']
+            }
+            
+        except ValueError:
+            raise  # 都市が見つからない場合はそのまま再発生
+        except Exception as e:
+            raise Exception(f"ジオコーディングAPIエラー: {str(e)}")
     
     def _get_coordinates(self, city: str) -> Dict[str, float]:
         """
