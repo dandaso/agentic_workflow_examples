@@ -1,5 +1,5 @@
 from dotenv import load_dotenv
-from langchain.langchain_weather_agent import LangchainWeatherAgent
+from adk.adk_weather_agent import AdkWeatherAgent
 
 # 環境変数を読み込み
 load_dotenv()
@@ -12,8 +12,8 @@ def get_city_input():
 def main():
     print("天気情報アプリへようこそ！")
     
-    # LangChain Weather Agentを初期化
-    agent = LangchainWeatherAgent()
+    # Google ADK Weather Agentを初期化
+    agent = AdkWeatherAgent()
     
     # 都市名を入力
     city = get_city_input()
