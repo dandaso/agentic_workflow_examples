@@ -1,3 +1,4 @@
+import os
 from abc import ABC, abstractmethod
 from typing import Dict, Any
 
@@ -17,6 +18,21 @@ class WeatherAgent(ABC):
             name: エージェントの名前
         """
         self.name = name
+    
+    def _get_gemini_api_key(self) -> str:
+        """
+        Gemini API キーを環境変数から取得する共通メソッド
+        
+        Returns:
+            API キー文字列
+            
+        Raises:
+            ValueError: API キーが設定されていない場合
+        """
+        api_key = os.getenv('GEMINI_API_KEY')
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY環境変数が設定されていません")
+        return api_key
     
     @abstractmethod
     def run(self, city: str) -> str:
