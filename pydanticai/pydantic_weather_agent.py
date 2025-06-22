@@ -1,7 +1,10 @@
+import os
 from weather_agent import WeatherAgent
 from pydantic_ai import Agent
+from pydantic_ai.models.gemini import GeminiModel
 import googlemaps
 import requests
+from typing import Optional
 
 
 class PydanticWeatherAgent(WeatherAgent):
@@ -11,6 +14,22 @@ class PydanticWeatherAgent(WeatherAgent):
     
     def __init__(self):
         super().__init__("PydanticAI Weather Agent")
+        
+        # Geminiモデルの設定（API キーを環境変数から取得）
+        api_key = os.getenv('GEMINI_API_KEY')
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY環境変数が設定されていません")
+        
+        self.model = GeminiModel(self.GEMINI_MODEL, api_key=api_key)
+        
+        # PydanticAI Agentの初期化
+        self.agent = Agent(
+            model=self.model,
+            system_prompt="""
+            あなたは天気情報を提供する親切なアシスタントです。
+            ユーザーから都市名を受け取り、その都市の天気情報を日本語で分かりやすく説明してください。
+            """,
+        )
     
     def run(self, city: str) -> str:
         """
@@ -22,11 +41,23 @@ class PydanticWeatherAgent(WeatherAgent):
         Returns:
             天気情報を含む日本語メッセージ
         """
-        # 座標を取得
-        coords = self._get_coordinates(city)
-        
-        # 天気データを取得
-        weather_data = self._get_weather_data(coords['lat'], coords['lng'])
-        
-        # PydanticAIエージェントからのメッセージとして返す
-        return f"[{self.name}] {city}の天気をお調べしました。{weather_data['description']}"
+        try:
+            # 基本的なrun_syncの実装（まずはモック）
+            coords = self._get_coordinates(city)
+            weather_data = self._get_weather_data(coords['lat'], coords['lng'])
+            
+            # PydanticAI Agentを使って自然な日本語で回答生成
+            prompt = f"""
+            {city}の天気情報をお伝えします。
+            座標: 緯度{coords['lat']}, 経度{coords['lng']}
+            天気: {weather_data['condition']}
+            気温: {weather_data['temperature']}度
+            
+            この情報を使って、ユーザーに分かりやすく天気を説明してください。
+            """
+            
+            result = self.agent.run_sync(prompt)
+            return f"[{self.name}] {result.data}"
+            
+        except Exception as e:
+            return f"[{self.name}] エラーが発生しました: {str(e)}"

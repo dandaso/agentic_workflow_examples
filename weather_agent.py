@@ -8,6 +8,9 @@ class WeatherAgent(ABC):
     各ライブラリ（ADK, PydanticAI, LangChain）で実装される
     """
     
+    # 共通のGeminiモデル名
+    GEMINI_MODEL = 'gemini-1.5-flash'
+    
     def __init__(self, name: str):
         """
         Args:
