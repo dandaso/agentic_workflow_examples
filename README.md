@@ -224,4 +224,3 @@ uv run python main.py
 ---
 
 **🤖 このプロジェクトは [Claude Code](https://claude.ai/code) によって生成されました**
-EOF < /dev/null
