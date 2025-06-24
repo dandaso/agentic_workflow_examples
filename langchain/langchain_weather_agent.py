@@ -1,9 +1,10 @@
 import os
+
 from weather_agent import WeatherAgent
 from typing import List, Any, Dict
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.prompts import PromptTemplate
 from langchain_core.tools import tool
+from langgraph.prebuilt import create_react_agent
 import langchain
 langchain.verbose = False
 langchain.debug = False
@@ -21,10 +22,10 @@ class LangchainWeatherAgent(WeatherAgent):
         # Geminiモデルの設定（API キーを環境変数から自動取得）
         api_key = self._get_gemini_api_key()  # バリデーションのため
         
-        # 環境変数を直接設定
+        # 環境変数を直接設定（langchain_google_genaiはGOOGLE_API_KEYを使用）
         os.environ['GOOGLE_API_KEY'] = api_key
         
-        # LangChain LLMの初期化
+        # LangChain LLMの初期化（ツール呼び出し機能を有効化）
         self.llm = ChatGoogleGenerativeAI(
             model=self.GEMINI_MODEL,
             temperature=0.7
@@ -33,19 +34,8 @@ class LangchainWeatherAgent(WeatherAgent):
         # ツール定義
         self.tools = self._create_tools()
         
-        # プロンプトテンプレートの設定
-        prompt_template = PromptTemplate.from_template("""
-あなたは天気情報を提供する親切なアシスタントです。
-ユーザーから都市名を受け取り、その都市の天気情報を日本語で分かりやすく説明してください。
-
-利用可能なツール:
-- get_city_coordinates: 都市名から地理座標を取得
-- get_weather_data: 座標から詳細な天気情報を取得
-
-質問: {input}
-""")
-        
-        self.chain = prompt_template | self.llm
+        # ReActエージェントを作成（LLMが自動的にツールを選択・実行）
+        self.agent_executor = create_react_agent(self.llm, self.tools)
     
     def _create_tools(self) -> List[Any]:
         """
@@ -102,25 +92,25 @@ class LangchainWeatherAgent(WeatherAgent):
             天気情報を含む日本語メッセージ
         """
         try:
-            # ツールを使って座標を取得
-            get_city_coordinates_tool = self.tools[0]  # get_city_coordinates tool
-            coords = get_city_coordinates_tool.invoke(city)
-            
-            # ツールを使って天気データを取得
-            get_weather_data_tool = self.tools[1]  # get_weather_data tool
-            weather_data = get_weather_data_tool.invoke({"lat": coords['lat'], "lng": coords['lng']})
-            
-            # LLMに実際の天気データを含めて質問
-            prompt = f"""
+            # エージェントにタスクを実行させる
+            result = self.agent_executor.invoke({
+                "messages": [{
+                    "role": "user",
+                    "content": f"""
+あなたは天気情報を提供する親切なアシスタントです。
 {city}の天気情報を教えてください。
-座標: 緯度{coords['lat']}度、経度{coords['lng']}度
-天気データ: {weather_data['description']}
 
-この情報を元に、分かりやすく日本語で天気情報を説明してください。
+手順:
+1. まず get_city_coordinates ツールを使って都市の座標を取得してください
+2. 次に get_weather_data ツールを使って座標から天気情報を取得してください
+3. 取得した情報を分かりやすく日本語で説明してください
 """
+                }]
+            })
             
-            result = self.chain.invoke({"input": prompt})
-            return f"[{self.name}] {result.content}"
+            # 最終メッセージを取得
+            final_message = result["messages"][-1]
+            return f"[{self.name}] {final_message.content}"
             
         except Exception as e:
             # エラー時はフォールバック
